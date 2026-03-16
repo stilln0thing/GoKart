@@ -8,8 +8,22 @@ message User {
     string username = 3;
 }
 
+message CreateUserRequest {
+    string email = 1;
+    string username = 2;
+}
+
+message CreateUserResponse {
+    User user = 1;
+    string message = 2;
+}
+
 // This event will be sent to kafka
 message UserRegisteredEvent {
    User user = 1;
    int64 registered_at = 2; // timestamp 
+}
+
+service UserService {
+    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
 }
