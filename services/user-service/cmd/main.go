@@ -4,9 +4,16 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"net"
+	"syscall"
+	"os/signal"
+
 	"github.com/stilln0thing/GoKart/services/user-service/internal/infra"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/repository"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/service"
+	"github.com/stilln0thing/GoKart/services/user-service/internal/handler"
+	userpb "github.com/stilln0thing/GoKart/pkg/pb/user"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -26,7 +33,31 @@ func main() {
 	userRepo := repository.NewPostgresRepo(db)
 	userService := service.NewUserService(userRepo, kafkaProducer)
 
-	// Start gRPC server (not implemented in this snippet)
-	// ...
-	log.Println("User service started successfully", userService)
+	grpcServer := grpc.NewServer()
+	userHandler := handler.NewUserGRPCHandler(userService)
+	userpb.RegisterUserServiceServer(grpcServer, userHandler)
+
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	go func() {
+		log.Println("gRPC server listening on :50051")
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+	// 3. Wait for Control-C or Termination signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop // This blocks until a signal is received
+	log.Println("Shutting down gracefully...")
+	
+	// 4. Cleanup operations
+	grpcServer.GracefulStop()
+	db.Close()
+	// kafkaProducer.Close()
+	
+	log.Println("Service stopped.")
+	
 }

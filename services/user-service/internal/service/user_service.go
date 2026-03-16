@@ -2,27 +2,35 @@ package service
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/domain"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/repository"
 )
 
-type UswerService interface {
-	CreateUser(ctx context.Context, user *domain.User) error
+type UserService interface {
+	CreateUser(ctx context.Context, user *domain.User) (*domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-	UpdateUser(ctx context.Context, user *domain.User) error
-	DeleteUser(ctx context.Context, id string) error
+	// UpdateUser(ctx context.Context, user *domain.User) error
+	// DeleteUser(ctx context.Context, id string) error
 }
 
-type UserService struct {
-	repo repository.UserRepository
+type userService struct {
+	repo          repository.UserRepository
 	eventProducer UserEventProducer
 }
 
-func NewUserService(repo repository.UserRepository, eventProducer UserEventProducer) *UserService {
-	return &UserService{repo: repo, eventProducer: eventProducer}
+func NewUserService(repo repository.UserRepository, eventProducer UserEventProducer) *userService {
+	return &userService{repo: repo, eventProducer: eventProducer}
 }
 
-func (s *UserService) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
+func (s *userService) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
+	user.ID = uuid.New().String()
+	now := time.Now()
+	user.CreatedAt = now
+	user.UpdatedAt = now
+
 	if err := user.Validate(); err != nil {
 		return nil, err
 	}
@@ -32,4 +40,8 @@ func (s *UserService) CreateUser(ctx context.Context, user *domain.User) (*domai
 
 	// Produce Kafka event here (e.g., UserCreated)
 	return user, nil
+}
+
+func (s *userService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	return s.repo.GetUserByEmail(ctx, email)
 }
