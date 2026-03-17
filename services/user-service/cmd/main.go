@@ -7,7 +7,9 @@ import (
 	"net"
 	"syscall"
 	"os/signal"
+	_ "github.com/lib/pq"
 
+	"github.com/joho/godotenv"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/infra"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/repository"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/service"
@@ -17,6 +19,12 @@ import (
 )
 
 func main() {
+
+	// Load env
+	if err := godotenv.Load(); err != nil {
+		log.Println("Could not load env file")
+	}
+
 	// Initialise db
 	db, err := sql.Open("postgres", os.Getenv("POSTGRES_DSN"))
 	if err != nil {
@@ -47,13 +55,14 @@ func main() {
 			log.Fatalf("failed to serve: %v", err)
 		}
 	}()
-	// 3. Wait for Control-C or Termination signal
+
+	// Wait for Termination signal
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop // This blocks until a signal is received
 	log.Println("Shutting down gracefully...")
 	
-	// 4. Cleanup operations
+	// Cleanup operations
 	grpcServer.GracefulStop()
 	db.Close()
 	// kafkaProducer.Close()
