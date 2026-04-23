@@ -1,75 +1,106 @@
 package main
 
 import (
-	"database/sql"
-	"log"
+	"context"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
-	_ "github.com/lib/pq"
-
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	userpb "github.com/stilln0thing/GoKart/pkg/pb/user"
+	db "github.com/stilln0thing/GoKart/services/user-service/internal/db"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/handler"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/infra"
-	"github.com/stilln0thing/GoKart/services/user-service/internal/repository"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
+	// Structured Logger 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 
-	// Load env
+	// Load .env (local dev only)
 	if err := godotenv.Load(); err != nil {
-		log.Println("Could not load env file")
+		logger.Warn("could not load .env file, using environment variables")
 	}
 
-	// Initialise db
-	db, err := sql.Open("postgres", os.Getenv("POSTGRES_DSN"))
+	// PostgreSQL
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("POSTGRES_DSN"))
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Error("failed to connect to postgres", "error", err)
+		os.Exit(1)
 	}
+	if err := pool.Ping(ctx); err != nil {
+		logger.Error("failed to ping postgres", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("connected to postgres")
 
-	// Initialise infra (Kafka producer)
+	// sqlc Queries
+	queries := db.New(pool)
+
+	// Kafka Producer
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	if kafkaBroker == "" {
+		kafkaBroker = "localhost:9092"
+	}
 	kafkaProducer := infra.NewKafkaProducer(
-		[]string{os.Getenv("KAFKA_BROKER")},
-		"user-events",
+		[]string{kafkaBroker},
+		"user-registered",
 	)
 
-	// Initialise layers
-	userRepo := repository.NewPostgresRepo(db)
-	userService := service.NewUserService(userRepo, kafkaProducer)
-
-	grpcServer := grpc.NewServer()
+	// Service + Handler
+	userService := service.NewUserService(queries, kafkaProducer)
 	userHandler := handler.NewUserGRPCHandler(userService)
+
+	// gRPC Server
+	grpcServer := grpc.NewServer()
 	userpb.RegisterUserServiceServer(grpcServer, userHandler)
 	reflection.Register(grpcServer)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		logger.Error("failed to listen", "error", err)
+		os.Exit(1)
 	}
+
 	go func() {
-		log.Println("gRPC server listening on :50051")
+		logger.Info("gRPC server listening", "port", ":50051")
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+			logger.Error("gRPC server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	// Wait for Termination signal
+	// Graceful Shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop // This blocks until a signal is received
-	log.Println("Shutting down gracefully...")
+	sig := <-stop
 
-	// Cleanup operations
+	logger.Info("received shutdown signal", "signal", sig.String())
+	logger.Info("draining in-flight requests...")
+
+	// Stop accepting new RPCs and wait for in-flight to finish
 	grpcServer.GracefulStop()
-	db.Close()
-	// kafkaProducer.Close()
+	logger.Info("gRPC server stopped")
 
-	log.Println("Service stopped.")
+	// Close Kafka producer (flush pending writes)
+	if err := kafkaProducer.Close(); err != nil {
+		logger.Error("failed to close kafka producer", "error", err)
+	}
+	logger.Info("kafka producer closed")
 
+	// Close Postgres connection pool
+	pool.Close()
+	logger.Info("postgres pool closed")
+
+	logger.Info("user-service shutdown complete")
 }

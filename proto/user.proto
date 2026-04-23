@@ -2,28 +2,69 @@ syntax = "proto3";
 package user;
 option go_package = "pkg/pb/user;userpb";
 
+// ─── Messages ────────────────────────────────────────────────
+
 message User {
-    string id = 1;
-    string email = 2;
+    string id       = 1;
+    string email    = 2;
     string username = 3;
 }
 
-message CreateUserRequest {
-    string email = 1;
+// ─── Requests & Responses ────────────────────────────────────
+
+message RegisterUserRequest {
+    string email    = 1;
     string username = 2;
+    string password = 3;
 }
 
-message CreateUserResponse {
-    User user = 1;
+message RegisterUserResponse {
+    User   user    = 1;
     string message = 2;
 }
 
-// This event will be sent to kafka
-message UserRegisteredEvent {
-   User user = 1;
-   int64 registered_at = 2; // timestamp 
+message LoginUserRequest {
+    string email    = 1;
+    string password = 2;
 }
 
+message LoginUserResponse {
+    string token   = 1;
+    User   user    = 2;
+    string message = 3;
+}
+
+message GetUserRequest {
+    string id = 1;
+}
+
+message GetUserResponse {
+    User user = 1;
+}
+
+message UpdateUserRequest {
+    string id       = 1;
+    string email    = 2;
+    string username = 3;
+}
+
+message UpdateUserResponse {
+    User   user    = 1;
+    string message = 2;
+}
+
+// ─── Kafka Event Payloads ────────────────────────────────────
+
+message UserRegisteredEvent {
+   User  user          = 1;
+   int64 registered_at = 2;
+}
+
+// ─── Service ─────────────────────────────────────────────────
+
 service UserService {
-    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+    rpc RegisterUser (RegisterUserRequest)  returns (RegisterUserResponse);
+    rpc LoginUser    (LoginUserRequest)     returns (LoginUserResponse);
+    rpc GetUser      (GetUserRequest)       returns (GetUserResponse);
+    rpc UpdateUser   (UpdateUserRequest)    returns (UpdateUserResponse);
 }
