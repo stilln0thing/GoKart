@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"log"
+
 	"github.com/stilln0thing/GoKart/services/user-service/internal/domain"
 )
 
@@ -20,6 +22,7 @@ func (r *postgresRepo) CreateUser(ctx context.Context, user *domain.User) error 
 	if err != nil {
 		return err
 	}
+	log.Println("User created successfully")
 	return nil
 }
 

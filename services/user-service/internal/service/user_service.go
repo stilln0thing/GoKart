@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,6 +35,7 @@ func (s *userService) CreateUser(ctx context.Context, user *domain.User) (*domai
 	if err := user.Validate(); err != nil {
 		return nil, err
 	}
+	log.Println("Creating user in database...")
 	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return nil, err
 	}

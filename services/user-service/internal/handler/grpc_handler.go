@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 
 	userpb "github.com/stilln0thing/GoKart/pkg/pb/user"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/domain"
@@ -26,7 +27,7 @@ func (h *UserGRPCHandler) CreateUser(ctx context.Context, req *userpb.CreateUser
 		Email:    req.Email,
 		Username: req.Username,
 	}
-
+	log.Println("Creating user...")
 	createdUser, err := h.service.CreateUser(ctx, user)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to create user")

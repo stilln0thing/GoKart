@@ -3,19 +3,21 @@ package main
 import (
 	"database/sql"
 	"log"
-	"os"
 	"net"
-	"syscall"
+	"os"
 	"os/signal"
+	"syscall"
+
 	_ "github.com/lib/pq"
 
 	"github.com/joho/godotenv"
+	userpb "github.com/stilln0thing/GoKart/pkg/pb/user"
+	"github.com/stilln0thing/GoKart/services/user-service/internal/handler"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/infra"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/repository"
 	"github.com/stilln0thing/GoKart/services/user-service/internal/service"
-	"github.com/stilln0thing/GoKart/services/user-service/internal/handler"
-	userpb "github.com/stilln0thing/GoKart/pkg/pb/user"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -44,6 +46,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	userHandler := handler.NewUserGRPCHandler(userService)
 	userpb.RegisterUserServiceServer(grpcServer, userHandler)
+	reflection.Register(grpcServer)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -61,12 +64,12 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop // This blocks until a signal is received
 	log.Println("Shutting down gracefully...")
-	
+
 	// Cleanup operations
 	grpcServer.GracefulStop()
 	db.Close()
 	// kafkaProducer.Close()
-	
+
 	log.Println("Service stopped.")
-	
+
 }
