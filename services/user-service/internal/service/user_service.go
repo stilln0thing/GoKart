@@ -28,22 +28,22 @@ type UserService interface {
 // Implementation
 
 type userService struct {
-	queries       *db.Queries
-	eventProducer UserEventProducer
-	jwtSecret     []byte
-	logger        *slog.Logger
+	queries     *db.Queries
+	kafkaWorker *KafkaWorker
+	jwtSecret   []byte
+	logger      *slog.Logger
 }
 
-func NewUserService(queries *db.Queries, ep UserEventProducer) UserService {
+func NewUserService(queries *db.Queries, worker *KafkaWorker) UserService {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "gokart-dev-secret" // fallback for local dev
 	}
 	return &userService{
-		queries:       queries,
-		eventProducer: ep,
-		jwtSecret:     []byte(secret),
-		logger:        slog.Default().With("service", "user"),
+		queries:     queries,
+		kafkaWorker: worker,
+		jwtSecret:   []byte(secret),
+		logger:      slog.Default().With("service", "user"),
 	}
 }
 
@@ -86,13 +86,8 @@ func (s *userService) Register(ctx context.Context, username, email, password st
 		"email", email,
 	)
 
-	// Fire Kafka event (best-effort — don't fail the request if Kafka is down)
-	if pubErr := s.eventProducer.PublishUserRegistered(ctx, user); pubErr != nil {
-		s.logger.Error("failed to publish UserRegistered event",
-			"user_id", id.String(),
-			"error", pubErr,
-		)
-	}
+	// Enqueue Kafka event (non-blocking, best-effort)
+	s.kafkaWorker.Enqueue(UserEvent{Type: EventUserRegistered, User: user})
 
 	return user, nil
 }
@@ -162,13 +157,8 @@ func (s *userService) UpdateUser(ctx context.Context, id, username, email string
 
 	s.logger.Info("user updated", "user_id", id)
 
-	// Fire Kafka event (best-effort)
-	if pubErr := s.eventProducer.PublishUserUpdated(ctx, user); pubErr != nil {
-		s.logger.Error("failed to publish UserUpdated event",
-			"user_id", id,
-			"error", pubErr,
-		)
-	}
+	// Enqueue Kafka event (non-blocking, best-effort)
+	s.kafkaWorker.Enqueue(UserEvent{Type: EventUserUpdated, User: user})
 
 	return user, nil
 }

@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	// Structured Logger 
+	// Structured Logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
@@ -54,11 +54,15 @@ func main() {
 	}
 	kafkaProducer := infra.NewKafkaProducer(
 		[]string{kafkaBroker},
-		"user-registered",
+		"user-registered", 
 	)
 
+	// Kafka Worker Pool
+	kafkaWorker := service.NewKafkaWorker(100, logger)
+	kafkaWorker.Start(3, kafkaProducer) // start 3 worker goroutines
+
 	// Service + Handler
-	userService := service.NewUserService(queries, kafkaProducer)
+	userService := service.NewUserService(queries, kafkaWorker)
 	userHandler := handler.NewUserGRPCHandler(userService)
 
 	// gRPC Server
@@ -91,6 +95,9 @@ func main() {
 	// Stop accepting new RPCs and wait for in-flight to finish
 	grpcServer.GracefulStop()
 	logger.Info("gRPC server stopped")
+
+	// Stop the Kafka worker pool (waits for pending events to be published)
+	kafkaWorker.Stop()
 
 	// Close Kafka producer (flush pending writes)
 	if err := kafkaProducer.Close(); err != nil {

@@ -75,21 +75,11 @@ services:
       "
       echo 'Waiting for Kafka to be ready...'
 
-      TOPICS=(
-        user-registered
-        product-created
-        order-placed
-        inventory-updated
-        dlq-topic
-      )
+      TOPICS=(user-registered product-created order-placed inventory-updated dlq-topic)
 
       for topic in $${TOPICS[@]}; do
         echo \"Creating topic: $$topic\"
-        kafka-topics --create --if-not-exists \
-          --bootstrap-server kafka:29092 \
-          --replication-factor 1 \
-          --partitions 3 \
-          --topic $$topic
+        kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --replication-factor 1 --partitions 3 --topic $$topic
       done
 
       echo 'All topics created successfully.'
