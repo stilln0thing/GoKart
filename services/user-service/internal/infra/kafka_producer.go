@@ -74,6 +74,45 @@ func (p *KafkaProducer) PublishUserRegistered(ctx context.Context, user db.User)
 	return nil
 }
 
+// PublishUserUpdated publishes a UserUpdated event to Kafka.
+func (p *KafkaProducer) PublishUserUpdated(ctx context.Context, user db.User) error {
+	uid := uuid.UUID(user.ID.Bytes)
+
+	payload := struct {
+		Type      string `json:"type"`
+		UserID    string `json:"user_id"`
+		Username  string `json:"username"`
+		Email     string `json:"email"`
+		Timestamp int64  `json:"timestamp"`
+	}{
+		Type:      "UserUpdated",
+		UserID:    uid.String(),
+		Username:  user.Username,
+		Email:     user.Email,
+		Timestamp: time.Now().UnixMilli(),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	msg := kafka.Message{
+		Key:   []byte(uid.String()),
+		Value: data,
+	}
+
+	if err := p.writer.WriteMessages(ctx, msg); err != nil {
+		return fmt.Errorf("failed to write kafka message: %w", err)
+	}
+
+	p.logger.Info("published UserUpdated event",
+		"user_id", uid.String(),
+		"topic", p.writer.Topic,
+	)
+	return nil
+}
+
 // Close flushes and closes the Kafka writer. Called during graceful shutdown.
 func (p *KafkaProducer) Close() error {
 	p.logger.Info("closing kafka producer")

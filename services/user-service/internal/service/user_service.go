@@ -161,5 +161,14 @@ func (s *userService) UpdateUser(ctx context.Context, id, username, email string
 	}
 
 	s.logger.Info("user updated", "user_id", id)
+
+	// Fire Kafka event (best-effort)
+	if pubErr := s.eventProducer.PublishUserUpdated(ctx, user); pubErr != nil {
+		s.logger.Error("failed to publish UserUpdated event",
+			"user_id", id,
+			"error", pubErr,
+		)
+	}
+
 	return user, nil
 }

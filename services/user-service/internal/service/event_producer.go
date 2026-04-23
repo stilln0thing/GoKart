@@ -9,5 +9,6 @@ import (
 // UserEventProducer is the port for publishing user domain events to Kafka.
 type UserEventProducer interface {
 	PublishUserRegistered(ctx context.Context, user db.User) error
+	PublishUserUpdated(ctx context.Context, user db.User) error
 	Close() error
 }
