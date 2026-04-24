@@ -1,0 +1,65 @@
+syntax = "proto3";
+package order;
+option go_package = "pkg/pb/order;orderpb";
+
+// ─── Messages ────────────────────────────────────────────────
+
+message Order {
+    string id         = 1;
+    string user_id    = 2;
+    string product_id = 3;
+    int32  quantity   = 4;
+    string status     = 5;
+    int64  created_at = 6;
+    int64  updated_at = 7;
+}
+
+message OrderStatusUpdate {
+    string id         = 1;
+    string status     = 2;
+    int64  updated_at = 3;
+}
+
+// ─── Requests & Responses ────────────────────────────────────
+
+message CreateOrderRequest {
+    string user_id    = 1;
+    string product_id = 2;
+    int32  quantity   = 3;
+}
+
+message CreateOrderResponse {
+    Order  order   = 1;
+    string message = 2;
+}
+
+message GetOrderRequest {
+    string id = 1;
+}
+
+message GetOrderResponse {
+    Order order = 1;
+}
+
+message StreamOrderStatusRequest {
+    string id = 1;
+}
+
+// ─── Kafka Event Payloads ────────────────────────────────────
+
+message OrderPlacedEvent {
+    string order_id   = 1;
+    string user_id    = 2;
+    string product_id = 3;
+    int32  quantity   = 4;
+    int64  placed_at  = 5;
+}
+
+// ─── Service ─────────────────────────────────────────────────
+
+service OrderService {
+    rpc CreateOrder       (CreateOrderRequest)       returns (CreateOrderResponse);
+    rpc GetOrder          (GetOrderRequest)          returns (GetOrderResponse);
+    // server-streaming RPC
+    rpc StreamOrderStatus (StreamOrderStatusRequest) returns (stream OrderStatusUpdate);
+}

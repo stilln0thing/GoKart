@@ -61,3 +61,19 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE INDEX idx_orders_user_id ON orders(user_id);
 CREATE INDEX idx_orders_status  ON orders(status);
+
+-- Materialized view of users for the order service
+CREATE TABLE IF NOT EXISTS users_view (
+    id         UUID PRIMARY KEY,
+    username   VARCHAR(100) NOT NULL,
+    email      VARCHAR(255) NOT NULL UNIQUE
+);
+
+-- Materialized view of products for the order service
+CREATE TABLE IF NOT EXISTS products_view (
+    id          UUID PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    price       BIGINT       NOT NULL DEFAULT 0,
+    quantity    INT          NOT NULL DEFAULT 0
+);
+
